@@ -1,0 +1,9 @@
+[package]
+name = "gen_big_ledger_script"
+version = "0.26.0"
+authors = ["Massa Labs <info@massa.net>"]
+edition = "2021"
+
+[dependencies]
+massa_sdk = { workspace = true }
+massa_api_exports = { workspace = true }

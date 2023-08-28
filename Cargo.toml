@@ -42,6 +42,7 @@ members = [
   "massa-versioning",
   "massa-grpc",
   "massa-xtask",
+  "tools/gen_big_ledger_script"
 ]
 resolver = "2"
 

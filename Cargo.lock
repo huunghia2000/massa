@@ -1655,6 +1655,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen_big_ledger_script"
+version = "0.26.0"
+dependencies = [
+ "massa_api_exports",
+ "massa_sdk",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

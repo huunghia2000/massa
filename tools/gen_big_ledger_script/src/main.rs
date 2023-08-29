@@ -1,3 +1,7 @@
+use std::{collections::HashMap, path::PathBuf};
+
+use clap::{arg, command, Parser};
+use serde::Deserialize;
 
 use massa_api_exports::operation::OperationInput;
 // pub struct OperationInput {
@@ -10,6 +14,8 @@ use massa_api_exports::operation::OperationInput;
 // }
 
 use massa_sdk::Client;
+
+use crate::opcreator::OperationCreator;
 // impl Client {
 //     /// creates a new client
 //     pub async fn new(
@@ -26,6 +32,45 @@ use massa_sdk::Client;
 //     operations: Vec<OperationInput>,
 // ) -> RpcResult<Vec<OperationId>> {
 
+mod opcreator;
+
+#[derive(Deserialize, Debug)]
+pub struct ServerData {
+    ip: String,
+    node_privkey: String,
+    node_pubkey: String,
+    address: String,
+    bootstrap_server: bool,
+    inject_operations: usize,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeployData {
+    servers: HashMap<String, ServerData>,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short='d', long)]
+    deploy_file: PathBuf,
+
+    #[arg(short='a', long)]
+    api_node_host: String,
+}
+
 fn main() {
-    println!("Hello, world!");
+    let args = Args::parse();
+    let deploy_data: DeployData = toml::from_str(
+        std::fs::read_to_string(&args.deploy_file)
+            .expect("Unable to read deploy file")
+            .as_str(),
+    )
+    .expect("Unable to load data from deploy file data");
+
+    println!("{:?}", deploy_data);
+
+    assert!(deploy_data.servers.len() > 1, "Not enough serverse are configured");
+
+    let op_creator = OperationCreator::from_data(&deploy_data);
 }

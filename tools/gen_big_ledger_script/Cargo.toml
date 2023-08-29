@@ -7,3 +7,6 @@ edition = "2021"
 [dependencies]
 massa_sdk = { workspace = true }
 massa_api_exports = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+toml = "0.7.6"
+clap = { version = "4.4.1", features = ["derive"] }

@@ -16,6 +16,7 @@ use massa_models::version::{Version, VersionSerializer};
 use massa_serialization::{DeserializeError, Deserializer, Serializer};
 use massa_signature::{PublicKey, Signature};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use tracing::debug;
 use std::time::Instant;
 use std::{net::TcpStream, time::Duration};
 use stream_limiter::{Limiter, LimiterOptions};
@@ -88,6 +89,7 @@ impl BootstrapClientBinder {
         &mut self,
         duration: Option<Duration>,
     ) -> Result<BootstrapServerMessage, BootstrapError> {
+        debug!("TIM        Get bootstrap client next timeout");
         let deadline = duration.map(|d| Instant::now() + d);
 
         // read the known-len component of the message
@@ -97,6 +99,7 @@ impl BootstrapClientBinder {
             .map_err(|(err, _consumed)| err)?;
 
         let ServerMessageLeader { sig, msg_len } = self.decode_msg_leader(&known_len_buff)?;
+        debug!("TIM    Decoded ServerMessageLeader");
 
         // Update this bindings "most recently received" message hash, retaining the replaced value
         let message_deserializer = BootstrapServerMessageDeserializer::new((&self.cfg).into());
@@ -106,6 +109,7 @@ impl BootstrapClientBinder {
 
         let message = {
             if let Some(prev_msg) = prev_msg {
+                debug!("TIM    Previous message");
                 // Consume the rest of the message from the stream
                 let mut stream_bytes = vec![0u8; msg_len as usize];
 
@@ -113,19 +117,23 @@ impl BootstrapClientBinder {
                 self.read_exact_timeout(&mut stream_bytes[..], deadline)
                     .map_err(|(e, _consumed)| e)?;
                 let msg_bytes = &mut stream_bytes[..];
+                debug!("TIM    Read data");
 
                 // prepend the received message with the previous messages hash, and derive the new hash.
                 // TODO: some sort of recovery if this fails?
                 let rehash_seed = &[prev_msg.to_bytes().as_slice(), msg_bytes].concat();
                 let msg_hash = Hash::compute_from(rehash_seed);
                 self.remote_pubkey.verify_signature(&msg_hash, &sig)?;
+                debug!("TIM    Verified signature");
 
                 // ...And deserialize
                 let (_, msg) = message_deserializer
                     .deserialize::<DeserializeError>(msg_bytes)
                     .map_err(|err| BootstrapError::DeserializeError(format!("{}", err)))?;
+                debug!("TIM    Deserialized");
                 msg
             } else {
+                debug!("TIM    Doesn't have a previous message");
                 // Consume the rest of the message from the stream
                 let mut stream_bytes = vec![0u8; msg_len as usize];
 
@@ -133,15 +141,18 @@ impl BootstrapClientBinder {
                 self.read_exact_timeout(&mut stream_bytes[..], deadline)
                     .map_err(|(e, _)| e)?;
                 let sig_msg_bytes = &mut stream_bytes[..];
+                debug!("TIM    Read data");
 
                 // Compute the hash and verify
                 let msg_hash = Hash::compute_from(sig_msg_bytes);
                 self.remote_pubkey.verify_signature(&msg_hash, &sig)?;
+                debug!("TIM    Verify signature");
 
                 // ...And deserialize
                 let (_, msg) = message_deserializer
                     .deserialize::<DeserializeError>(sig_msg_bytes)
                     .map_err(|err| BootstrapError::DeserializeError(format!("{}", err)))?;
+                debug!("TIM    Deserialized");
                 msg
             }
         };

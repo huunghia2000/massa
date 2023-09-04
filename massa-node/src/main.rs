@@ -419,9 +419,10 @@ async fn launch(
         Err(err) => panic!("critical error detected in the bootstrap process: {}", err),
     };
 
-    if !final_state.read().is_db_valid() {
+    let db_valid = final_state.read().is_db_valid();
+    if !db_valid {
         // TODO: Bootstrap again instead of panicking
-        panic!("critical: db is not valid after bootstrap");
+        final_state.write().init_execution_trail_hash();
     }
 
     if args.restart_from_snapshot_at_period.is_none() {

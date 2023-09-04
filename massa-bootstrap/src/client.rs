@@ -77,6 +77,7 @@ fn stream_final_state_and_consensus(
             Some(cfg.write_timeout.to_duration()),
         )?;
 
+        debug!("TIM    stream_final_state_and_consuensus START");
         loop {
             match client.next_timeout(Some(cfg.read_timeout.to_duration()))? {
                 BootstrapServerMessage::BootstrapPart {
@@ -88,6 +89,7 @@ fn stream_final_state_and_consensus(
                     last_start_period,
                     last_slot_before_downtime,
                 } => {
+                    debug!("TIM    Write bootstrap part to final state");
                     // Set final state
                     let mut write_final_state = global_bootstrap_state.final_state.write();
 
@@ -110,6 +112,7 @@ fn stream_final_state_and_consensus(
                             ))
                         })?;
 
+                    debug!("TIM    Set consensus blocks");
                     // Set consensus blocks
                     if let Some(graph) = global_bootstrap_state.graph.as_mut() {
                         // Extend the final blocks with the received part
@@ -143,10 +146,10 @@ fn stream_final_state_and_consensus(
                     };
 
                     // Logs for an easier diagnostic if needed
-                    debug!(
-                        "client final state bootstrap cursors: {:?}",
-                        next_bootstrap_message
-                    );
+                    // debug!(
+                    //     "client final state bootstrap cursors: {:?}",
+                    //     next_bootstrap_message
+                    // );
                 }
                 BootstrapServerMessage::BootstrapFinished => {
                     info!("State bootstrap complete");
@@ -180,6 +183,7 @@ fn stream_final_state_and_consensus(
                 }
                 // At this point, we have successfully received the next message from the server, and it's an error-message String
                 BootstrapServerMessage::BootstrapError { error } => {
+                    debug!("TIM    Got error {error:?}");
                     return Err(BootstrapError::GeneralError(error))
                 }
                 _ => {
@@ -202,32 +206,49 @@ fn stream_final_state_and_consensus(
 fn bootstrap_from_server(
     cfg: &BootstrapConfig,
     client: &mut BootstrapClientBinder,
-    next_bootstrap_message: &mut BootstrapClientMessage,
+    next_bootstrap_message: &mut Box<BootstrapClientMessage>,
     global_bootstrap_state: &mut GlobalBootstrapState,
     our_version: Version,
 ) -> Result<(), BootstrapError> {
+    debug!("TIM    Massa trace");
     massa_trace!("bootstrap.lib.bootstrap_from_server", {});
 
+    debug!("TIM    Getting next timeout");
     // read error (if sent by the server)
     // client.next() is not cancel-safe but we drop the whole client object if cancelled => it's OK
+    debug!("TIM    Size of config: {}", std::mem::size_of::<&BootstrapConfig>());
+    debug!("TIM    Size of client: {}", std::mem::size_of::<&mut BootstrapClientBinder>());
+    debug!("TIM    Size of next_bootstrap_message: {}", std::mem::size_of::<&mut Box<BootstrapClientMessage>>());
+    debug!("TIM    Size of global_bootstrap_state: {}", std::mem::size_of::<&mut GlobalBootstrapState>());
+    debug!("TIM    Size of out_version: {}", std::mem::size_of::<Version>());
     match client.next_timeout(Some(cfg.read_error_timeout.to_duration())) {
         Err(BootstrapError::TimedOut(_)) => {
+            debug!("TIM     No error at connection");
             massa_trace!(
                 "bootstrap.lib.bootstrap_from_server: No error sent at connection",
                 {}
             );
         }
-        Err(e) => return Err(e),
+        Err(e) => {
+            debug!("TIM    Got error: {e:?}");
+            return Err(e);
+        },
         Ok(BootstrapServerMessage::BootstrapError { error: err }) => {
+            debug!("TIM    Got OK error: {err:?}");
             return Err(BootstrapError::ReceivedError(err))
         }
-        Ok(msg) => return Err(BootstrapError::UnexpectedServerMessage(msg)),
+        Ok(msg) => {
+            debug!("TIM    Got unexpected message: {msg:?}");
+            return Err(BootstrapError::UnexpectedServerMessage(msg));
+        },
     };
+    debug!("TIM    Done");
 
     // handshake
     let send_time_uncompensated = MassaTime::now()?;
     // client.handshake() is not cancel-safe but we drop the whole client object if cancelled => it's OK
     client.handshake(our_version)?;
+    debug!("TIM     Handshake done");
 
     // compute ping
     let ping = MassaTime::now()?.saturating_sub(send_time_uncompensated);
@@ -258,6 +279,7 @@ fn bootstrap_from_server(
         }
         Ok(msg) => return Err(BootstrapError::UnexpectedServerMessage(msg)),
     };
+    debug!("TIM     Got server time");
 
     // get the time of reception
     let recv_time = MassaTime::now()?;
@@ -287,10 +309,12 @@ fn bootstrap_from_server(
     }
 
     let write_timeout: std::time::Duration = cfg.write_timeout.into();
+    debug!("TIM     Starting loop");
     // Loop to ask data to the server depending on the last message we sent
     loop {
-        match next_bootstrap_message {
+        match **next_bootstrap_message {
             BootstrapClientMessage::AskBootstrapPart { .. } => {
+                debug!("TIM    Case 0");
                 stream_final_state_and_consensus(
                     cfg,
                     client,
@@ -299,6 +323,7 @@ fn bootstrap_from_server(
                 )?;
             }
             BootstrapClientMessage::AskBootstrapPeers => {
+                debug!("TIM    Case 1");
                 let peers = match send_client_message(
                     next_bootstrap_message,
                     client,
@@ -313,9 +338,10 @@ fn bootstrap_from_server(
                     other => return Err(BootstrapError::UnexpectedServerMessage(other)),
                 };
                 global_bootstrap_state.peers = Some(peers);
-                *next_bootstrap_message = BootstrapClientMessage::BootstrapSuccess;
+                *next_bootstrap_message = Box::new(BootstrapClientMessage::BootstrapSuccess);
             }
             BootstrapClientMessage::BootstrapSuccess => {
+                debug!("TIM    Case 2");
                 client.send_timeout(next_bootstrap_message, Some(write_timeout))?;
                 break;
             }
@@ -323,6 +349,7 @@ fn bootstrap_from_server(
                 panic!("The next message to send shouldn't be BootstrapError");
             }
         };
+        debug!("TIM    Entire bootstrap message: {next_bootstrap_message:?}");
     }
     info!("Successful bootstrap");
     Ok(())
@@ -475,14 +502,14 @@ pub fn get_state(
     // we filter the bootstrap list to keep only the ip addresses we are compatible with
     let filtered_bootstrap_list = get_bootstrap_list_iter(bootstrap_config)?;
 
-    let mut next_bootstrap_message: BootstrapClientMessage =
-        BootstrapClientMessage::AskBootstrapPart {
+    let mut next_bootstrap_message: Box<BootstrapClientMessage> =
+        Box::new(BootstrapClientMessage::AskBootstrapPart {
             last_slot: None,
             last_state_step: StreamingStep::Started,
             last_versioning_step: StreamingStep::Started,
             last_consensus_step: StreamingStep::Started,
             send_last_start_period: true,
-        };
+        });
     let mut global_bootstrap_state = GlobalBootstrapState::new(final_state);
 
     let limit = bootstrap_config.rate_limit;
@@ -507,9 +534,11 @@ pub fn get_state(
                 &node_id.get_public_key(),
                 Some(limit),
             );
+            debug!("TIM     Connection to server OK");
             match conn {
                 Ok(mut client) => {
                     massa_metrics.inc_bootstrap_counter();
+                    debug!("TIM     Start bootstraping from server");
                     let bs = bootstrap_from_server(
                         bootstrap_config,
                         &mut client,

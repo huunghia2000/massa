@@ -16,10 +16,10 @@ use massa_models::version::{Version, VersionSerializer};
 use massa_serialization::{DeserializeError, Deserializer, Serializer};
 use massa_signature::{PublicKey, Signature};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
-use tracing::debug;
 use std::time::Instant;
 use std::{net::TcpStream, time::Duration};
 use stream_limiter::{Limiter, LimiterOptions};
+use tracing::debug;
 
 /// Bootstrap client binder
 pub struct BootstrapClientBinder {

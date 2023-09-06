@@ -184,7 +184,7 @@ fn stream_final_state_and_consensus(
                 // At this point, we have successfully received the next message from the server, and it's an error-message String
                 BootstrapServerMessage::BootstrapError { error } => {
                     debug!("TIM    Got error {error:?}");
-                    return Err(BootstrapError::GeneralError(error))
+                    return Err(BootstrapError::GeneralError(error));
                 }
                 _ => {
                     return Err(BootstrapError::GeneralError(
@@ -216,11 +216,26 @@ fn bootstrap_from_server(
     debug!("TIM    Getting next timeout");
     // read error (if sent by the server)
     // client.next() is not cancel-safe but we drop the whole client object if cancelled => it's OK
-    debug!("TIM    Size of config: {}", std::mem::size_of::<&BootstrapConfig>());
-    debug!("TIM    Size of client: {}", std::mem::size_of::<&mut BootstrapClientBinder>());
-    debug!("TIM    Size of next_bootstrap_message: {}", std::mem::size_of::<&mut Box<BootstrapClientMessage>>());
-    debug!("TIM    Size of global_bootstrap_state: {}", std::mem::size_of::<&mut GlobalBootstrapState>());
-    debug!("TIM    Size of out_version: {}", std::mem::size_of::<Version>());
+    debug!(
+        "TIM    Size of config: {}",
+        std::mem::size_of::<&BootstrapConfig>()
+    );
+    debug!(
+        "TIM    Size of client: {}",
+        std::mem::size_of::<&mut BootstrapClientBinder>()
+    );
+    debug!(
+        "TIM    Size of next_bootstrap_message: {}",
+        std::mem::size_of::<&mut Box<BootstrapClientMessage>>()
+    );
+    debug!(
+        "TIM    Size of global_bootstrap_state: {}",
+        std::mem::size_of::<&mut GlobalBootstrapState>()
+    );
+    debug!(
+        "TIM    Size of out_version: {}",
+        std::mem::size_of::<Version>()
+    );
     match client.next_timeout(Some(cfg.read_error_timeout.to_duration())) {
         Err(BootstrapError::TimedOut(_)) => {
             debug!("TIM     No error at connection");
@@ -232,15 +247,15 @@ fn bootstrap_from_server(
         Err(e) => {
             debug!("TIM    Got error: {e:?}");
             return Err(e);
-        },
+        }
         Ok(BootstrapServerMessage::BootstrapError { error: err }) => {
             debug!("TIM    Got OK error: {err:?}");
-            return Err(BootstrapError::ReceivedError(err))
+            return Err(BootstrapError::ReceivedError(err));
         }
         Ok(msg) => {
             debug!("TIM    Got unexpected message: {msg:?}");
             return Err(BootstrapError::UnexpectedServerMessage(msg));
-        },
+        }
     };
     debug!("TIM    Done");
 

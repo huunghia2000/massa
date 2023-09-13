@@ -77,7 +77,7 @@ impl<'a> Debug for DeserializeError<'a> {
             last_input = Some(error.0);
         }
         if let Some(last_input) = last_input {
-            writeln!(f, "Input: {:?}", last_input)?;
+            // writeln!(f, "Input: {:?}", last_input)?;
         }
         Ok(())
     }
